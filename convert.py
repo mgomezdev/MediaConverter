@@ -1,9 +1,13 @@
 # TODO: make this take a directory as an argument
 
+# External apps required:
+# - ffmpeg (with lib-x265 and lib-faac enabled)
+# - mkvmerge
+
 import os, ffmpy, subprocess, logging, sys
 TARGET_FOLDER = '/users/mgomez/Desktop/test/'
 vid_extensions = {".flv",".rmvb",".divx",".ogm",".mkv",".mov",".avi",".wmv",".m4v",".mp4"}
-sub_extensions = {".srt",".ssa",".sub"}
+sub_extensions = {".srt",".ssa",".sub",".idx"}
 
 from logging import handlers
 # Setup logging
@@ -21,6 +25,8 @@ fhand = logging.FileHandler('./transcode.log')
 fhand.setFormatter(format)
 log.addHandler(fhand)
 
+
+# TODO make handle sub files also
 def mkvMerge(baseFolder = None, baseFileName = None):
     logging.debug('Entered call to mkvmerge')
     # We'll assume that the srt and mkv have the same file name
@@ -33,7 +39,7 @@ def mkvMerge(baseFolder = None, baseFileName = None):
     log.debug('Checking if mkv and srt file exist for %s', baseFileName)
     if not os.path.isfile(srtPath) or not os.path.isfile(mkvPath):
         # no srt file
-        log.error('Either srt or mkv do not exist for %s', baseFileName)
+        log.debug('Either srt or mkv do not exist for %s', baseFileName)
         return
     log.debug('srt and mkv both exist for %s', baseFileName)
     #Rename the existing file to a temp extension
