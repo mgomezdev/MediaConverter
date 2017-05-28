@@ -2,14 +2,16 @@
 
 # External apps required:
 # - ffmpeg (with lib-x265 and lib-faac enabled)
-# - mkvmerge
 
-import os, ffmpy, subprocess, logging, sys
+import ffmpy
+import logging
+import os
+import sys
+
 TARGET_FOLDER = '/users/mgomez/Desktop/test/'
 vid_extensions = {".flv",".rmvb",".divx",".ogm",".mkv",".mov",".avi",".wmv",".m4v",".mp4"}
 sub_extensions = {".srt",".ssa",".sub",".idx"}
 
-from logging import handlers
 # Setup logging
 log = logging.getLogger('')
 log.setLevel(logging.INFO)
@@ -24,47 +26,6 @@ log.addHandler(sout)
 fhand = logging.FileHandler('./transcode.log')
 fhand.setFormatter(format)
 log.addHandler(fhand)
-
-
-# TODO make handle sub files also
-def mkvMerge(baseFolder = None, baseFileName = None):
-    logging.debug('Entered call to mkvmerge')
-    # We'll assume that the srt and mkv have the same file name
-    #  Since this method is a pretty cheap one, we can call it from both
-    #  the FFMPEG transcode and the srt rename, hopefully hitting on one of them
-    srtPath = os.path.join(baseFolder, baseFileName + '.srt')
-    mkvPath = os.path.join(baseFolder, baseFileName + '.mkv')
-    tmpPath = os.path.join(baseFolder, baseFileName + '.tmp.mkv')
-
-    log.debug('Checking if mkv and srt file exist for %s', baseFileName)
-    if not os.path.isfile(srtPath) or not os.path.isfile(mkvPath):
-        # no srt file
-        log.debug('Either srt or mkv do not exist for %s', baseFileName)
-        return
-    log.debug('srt and mkv both exist for %s', baseFileName)
-    #Rename the existing file to a temp extension
-    #  This way mkvmerge can use the 'real' name as the final destination
-    #  making cleanup a lot easier
-    log.debug('renaming %s to %s', mkvPath, tmpPath)
-    os.rename(mkvPath, tmpPath)
-    # Execute the merge (pull the subtitles into the mkv)
-    try:
-        mkvMergeCmd = "mkvmerge -o '{}' '{}' '{}'".format(mkvPath,tmpPath,srtPath)
-        log.info('Attempting to merge srt %s with mkv %s into new file %s',srtPath,tmpPath, mkvPath)
-        log.debug('Merge Command - %s', mkvMergeCmd)
-        results = subprocess.check_call(mkvMergeCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        log.info('Merge successful. cleaning up by removing tmp and srt files')
-        # Remove the old files
-        os.remove(srtPath)
-        os.remove(tmpPath)
-    except subprocess.CalledProcessError as e:
-        log.error('Error during mkvmerge for %s ', mkvPath)
-        log.debug('Renaming the temp file back due to error')
-        os.rename(tmpPath,mkvPath)
-    except:
-        log.error('Unknown type of error. roll back by renaming the tmp file')
-        os.rename(tmpPath,mkvPath)
-    return
 
 def processFolder(target = None):
     for root, dirs, files in os.walk(target):
@@ -107,9 +68,6 @@ def processFolder(target = None):
                         log.debug('Deleting the original file')
                         #delete the original file
                         os.remove(os.path.join(root,name))
-                        log.info('Calling mkvMerge to handle potential srt files')
-                        log.debug('folder: %s filename: %s', root, filename)
-                        mkvMerge(root, filename)
                     except:
                         # FFMPEG choked on something.
                         #  Log the error
@@ -118,17 +76,12 @@ def processFolder(target = None):
                     logging.info('Video file already HEVC ignoring %s', filename)
 
             elif ext in sub_extensions:
-                logging.info('Found subtitle file, attempting to merge with applicable mkv %s', name)
-                hevcName =""
+                logging.info('Found subtitle file: %s', name)
                 if not filename.endswith("-HEVC"):
                     logging.warning('sub file missing HEVC tail, renaming %s', name)
                     # rename the subtitle file to math the new name of the transcoded one
                     hevcName = filename + " -HEVC"
                     os.rename(os.path.join(root,name), os.path.join(root, hevcName + ext))
-                else:
-                    hevcName = filename
-                # merge the srt and mkv (if applicable)
-                mkvMerge(root, hevcName)
 
             else:
                 # I don't know what you are, but get out of my library
