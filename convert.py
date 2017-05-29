@@ -51,13 +51,13 @@ def processFolder(target = None):
             filename = os.path.splitext(name)[0]
             # the extnesion itself (including the '.')
             ext = os.path.splitext(name)[1]
-            #print "file: " + filename + "\next: " + ext
+            # The full path to the file (useful for safe deletes and other absolute call
+            sourceFullPath = os.path.join(root,name)
 
             if ext in vid_extensions:
 
                 # Only check files that aren't already marked
                 if not filename.endswith("-HEVC"):
-                    sourceFullPath = os.path.join(root,name)
                     destFullPath = os.path.join(root, filename+" -HEVC.mkv")
 
                     statinfo = os.stat(sourceFullPath)
@@ -92,7 +92,7 @@ def processFolder(target = None):
                             log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
                             log.debug('Deleting the original file')
                             #delete the original file
-                            os.remove(os.path.join(root,name))
+                            os.remove(sourceFullPath)
                         except:
                             # FFMPEG choked on something.
                             #  Log the error
@@ -110,15 +110,14 @@ def processFolder(target = None):
                     logging.warning('sub file missing HEVC tail, renaming %s', name)
                     # rename the subtitle file to math the new name of the transcoded one
                     hevcName = filename + " -HEVC"
-                    os.rename(os.path.join(root,name), os.path.join(root, hevcName + ext))
+                    os.rename(sourceFullPath, os.path.join(root, hevcName + ext))
 
             else:
                 # I don't know what you are, but get out of my library
                 #No, seriously.  The library has some junk files from previous media managers
                 #  e.g. ".cover" files or cover art jpgs.  We don't want those any more.
-                unknownFile = os.path.join(root,name)
-                log.info('unknown file type, deleting - %s', unknownFile)
-                os.remove(unknownFile)
+                log.info('unknown file type, deleting - %s', sourceFullPath)
+                os.remove(sourceFullPath)
     return
 
 
