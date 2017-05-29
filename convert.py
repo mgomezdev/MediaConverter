@@ -11,6 +11,9 @@ import sys
 TARGET_FOLDER = '/users/mgomez/Desktop/test/'
 vid_extensions = {".flv",".rmvb",".divx",".ogm",".mkv",".mov",".avi",".wmv",".m4v",".mp4"}
 sub_extensions = {".srt",".ssa",".sub",".idx"}
+ONE_GB_IN_BYTES = 1073741824
+
+FORCE_CONVERSION_MIN_SIZE = ONE_GB_IN_BYTES
 
 # Setup logging
 log = logging.getLogger('')
@@ -27,6 +30,20 @@ fhand = logging.FileHandler('./transcode.log')
 fhand.setFormatter(format)
 log.addHandler(fhand)
 
+def isHEVC(target = None):
+    FFPROBE_CMD = 'ffprobe'
+
+    call_result = subprocess.check_output([FFPROBE_CMD, '-v', 'quiet', '-print_format', 'json', '-show_streams', target])
+    results = json.loads(call_result)
+    streams = results['streams']
+
+    hasHEVC = False
+    for stream in streams:
+        if stream["codec_name"] == "hevc":
+            hasHEVC = True
+
+    return hasHEVC
+
 def processFolder(target = None):
     for root, dirs, files in os.walk(target):
         for name in files:
@@ -38,42 +55,54 @@ def processFolder(target = None):
 
             if ext in vid_extensions:
 
-                # Make sure we don't reencode things we've already encoded
+                # Only check files that aren't already marked
                 if not filename.endswith("-HEVC"):
                     sourceFullPath = os.path.join(root,name)
                     destFullPath = os.path.join(root, filename+" -HEVC.mkv")
 
-                    log.info('Executing transcode for %s', sourceFullPath)
+                    statinfo = os.stat(sourceFullPath)
 
-                    #If the job crashed in the middle of a transcode, delete the partially completed object
-                    if os.path.isfile(destFullPath):
-                        logging.warning('Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s', sourceFullPath, destFullPath)
-                        os.remove(destFullPath)
+                    # Check if file already uses HEVC codec
+                    #   However, since there are other transcode profiles (e.g. fast)
+                    #   if the filesize is too large, let's run it anyway
 
-                    # FFMPEG args and reason
-                    #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
-                    #   -c:v lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
-                    #   -c:a libfdk_aac -b:a 128k <- use libdfk's aac encoder (best quality encoder for mmpeg as of 8/29/16) w/ each channel at 128k bits
-                    ff = ffmpy.FFmpeg(
-                        inputs={sourceFullPath : None},
-                        outputs={destFullPath : '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
+                    if not isHEVC(sourceFullPath) or statinfo.st_size >= FORCE_CONVERSION_MIN_SIZE:
 
-                    try:
-                        #print so we know where we are (it makes me feel better being able to see the ffmpeg command)
-                        #  also helpful for debug if ffmpeg crashes out
-                        log.debug('FFMPEG command - %s', ff.cmd)
-                        #Make the magic happen
-                        ff.run()
-                        log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
-                        log.debug('Deleting the original file')
-                        #delete the original file
-                        os.remove(os.path.join(root,name))
-                    except:
-                        # FFMPEG choked on something.
-                        #  Log the error
-                        log.error('FFMPEG failed for %s', sourceFullPath)
+                        log.info('Executing transcode for %s', sourceFullPath)
+
+                        #If the job crashed in the middle of a transcode, delete the partially completed object
+                        if os.path.isfile(destFullPath):
+                            logging.warning('Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s', sourceFullPath, destFullPath)
+                            os.remove(destFullPath)
+
+                        # FFMPEG args and reason
+                        #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
+                        #   -c:v lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
+                        #   -c:a libfdk_aac -b:a 128k <- use libdfk's aac encoder (best quality encoder for mmpeg as of 8/29/16) w/ each channel at 128k bits
+                        ff = ffmpy.FFmpeg(
+                            inputs={sourceFullPath : None},
+                            outputs={destFullPath : '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
+
+                        try:
+                            #print so we know where we are (it makes me feel better being able to see the ffmpeg command)
+                            #  also helpful for debug if ffmpeg crashes out
+                            log.debug('FFMPEG command - %s', ff.cmd)
+                            #Make the magic happen
+                            ff.run()
+                            log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
+                            log.debug('Deleting the original file')
+                            #delete the original file
+                            os.remove(os.path.join(root,name))
+                        except:
+                            # FFMPEG choked on something.
+                            #  Log the error
+                            log.error('FFMPEG failed for %s', sourceFullPath)
+                    else:
+                        logging.info('Video already in HEVC, but not labeled.  Correcting label of r%s.', filename)
+                        os.rename(sourceFullPath,destFullPath)
                 else:
-                    logging.info('Video file already HEVC ignoring %s', filename)
+                    logging.info('Video file already HEVC and labeled. Ignoring %s', filename)
+
 
             elif ext in sub_extensions:
                 logging.info('Found subtitle file: %s', name)
