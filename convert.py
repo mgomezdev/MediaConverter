@@ -7,17 +7,26 @@ import ffmpy
 import logging
 import os
 import sys
+import subprocess
+import json
 
-TARGET_FOLDER = '/users/mgomez/Desktop/test/'
+# Constants
 vid_extensions = {".flv",".rmvb",".divx",".ogm",".mkv",".mov",".avi",".wmv",".m4v",".mp4"}
 sub_extensions = {".srt",".ssa",".sub",".idx"}
-ONE_GB_IN_BYTES = 1073741824
+ONE_MB_IN_BYTES = 2 ** 20
+ONE_GB_IN_BYTES = 2 ** 30
 
+# arguments
+TARGET_FOLDER = '/Volumes/TARDIS/movies'
 FORCE_CONVERSION_MIN_SIZE = ONE_GB_IN_BYTES
+deleteUknown = True
+logLevel = logging.INFO
+hevcTag = " -HEVC"
+
 
 # Setup logging
 log = logging.getLogger('')
-log.setLevel(logging.INFO)
+log.setLevel(logLevel)
 format=logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
 # STDout handler
@@ -57,8 +66,8 @@ def processFolder(target = None):
             if ext in vid_extensions:
 
                 # Only check files that aren't already marked
-                if not filename.endswith("-HEVC"):
-                    destFullPath = os.path.join(root, filename+" -HEVC.mkv")
+                if not filename.endswith(hevcTag):
+                    destFullPath = os.path.join(root, filename + hevcTag + ".mkv")
 
                     statinfo = os.stat(sourceFullPath)
 
@@ -70,7 +79,7 @@ def processFolder(target = None):
 
                         log.info('Executing transcode for %s', sourceFullPath)
 
-                        #If the job crashed in the middle of a transcode, delete the partially completed object
+                        # If the job crashed in the middle of a transcode, delete the partially completed object
                         if os.path.isfile(destFullPath):
                             logging.warning('Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s', sourceFullPath, destFullPath)
                             os.remove(destFullPath)
@@ -84,19 +93,19 @@ def processFolder(target = None):
                             outputs={destFullPath : '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
 
                         try:
-                            #print so we know where we are (it makes me feel better being able to see the ffmpeg command)
+                            # print so we know where we are (it makes me feel better being able to see the ffmpeg command)
                             #  also helpful for debug if ffmpeg crashes out
                             log.debug('FFMPEG command - %s', ff.cmd)
-                            #Make the magic happen
+                            # Make the magic happen
                             ff.run()
                             log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
                             log.debug('Deleting the original file')
-                            #delete the original file
+                            # delete the original file
                             os.remove(sourceFullPath)
                         except:
                             # FFMPEG choked on something.
                             #  Log the error
-                            log.error('FFMPEG failed for %s', sourceFullPath)
+                            log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)', sourceFullPath)
                     else:
                         logging.info('Video already in HEVC, but not labeled.  Correcting label of r%s.', filename)
                         os.rename(sourceFullPath,destFullPath)
@@ -106,18 +115,21 @@ def processFolder(target = None):
 
             elif ext in sub_extensions:
                 logging.info('Found subtitle file: %s', name)
-                if not filename.endswith("-HEVC"):
+                if not filename.endswith(hevcTag):
                     logging.warning('sub file missing HEVC tail, renaming %s', name)
                     # rename the subtitle file to math the new name of the transcoded one
-                    hevcName = filename + " -HEVC"
-                    os.rename(sourceFullPath, os.path.join(root, hevcName + ext))
+                    hevcName = filename + hevcTag + ext
+                    os.rename(sourceFullPath, os.path.join(root, hevcName))
 
             else:
-                # I don't know what you are, but get out of my library
-                #No, seriously.  The library has some junk files from previous media managers
-                #  e.g. ".cover" files or cover art jpgs.  We don't want those any more.
-                log.info('unknown file type, deleting - %s', sourceFullPath)
-                os.remove(sourceFullPath)
+                if deleteUknown:
+                    # I don't know what you are, but get out of my library
+                    # No, seriously.  The library has some junk files from previous media managers
+                    #  e.g. ".cover" files or cover art jpgs.  We don't want those any more.
+                    log.info('unknown file type, deleting: %s', sourceFullPath)
+                    os.remove(sourceFullPath)
+                else:
+                    log.info('unknown file type for file: %s', sourceFullPath)
     return
 
 
