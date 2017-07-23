@@ -44,7 +44,11 @@ def isHEVC(target = None):
     log.debug('Checking codecs for %s',target)
     FFPROBE_CMD = 'ffprobe'
 
-    call_result = subprocess.check_output([FFPROBE_CMD, '-v', 'quiet', '-print_format', 'json', '-show_streams', target])
+    try:
+      call_result = subprocess.check_output([FFPROBE_CMD, '-v', 'quiet', '-print_format', 'json', '-show_streams', target])
+    except:
+      log.error('Unexpected error checking stream info for %s',target)
+      return False
     results = json.loads(call_result)
     streams = results['streams']
     log.debug('Streams for %s: %s',target,streams)
