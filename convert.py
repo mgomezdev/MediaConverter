@@ -17,11 +17,12 @@ ONE_MB_IN_BYTES = 2 ** 20
 ONE_GB_IN_BYTES = 2 ** 30
 
 # arguments
-TARGET_FOLDER = '/Volumes/TARDIS/movies'
+TARGET_FOLDER = '/raid/video'
 FORCE_CONVERSION_MIN_SIZE = ONE_GB_IN_BYTES
 deleteUknown = True
 logLevel = logging.INFO
 hevcTag = " -HEVC"
+staySafe = True 
 
 
 # Setup logging
@@ -113,7 +114,12 @@ def processFolder(target = None):
                         except:
                             # FFMPEG choked on something.
                             #  Log the error
-                            log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)', sourceFullPath)
+                            # Safe Approach
+                            if staySafe:
+                              log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)', sourceFullPath)
+                            else:
+                              log.error('FFMPEG failed for %s, removing temp files', sourceFullPath)
+                              os.remove(destFullPath)
                     else:
                         logging.info('Video already in HEVC, but not labeled.  Correcting label of r%s.', filename)
                         os.rename(sourceFullPath,destFullPath)
