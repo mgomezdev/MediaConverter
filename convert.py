@@ -40,16 +40,24 @@ fhand.setFormatter(format)
 log.addHandler(fhand)
 
 def isHEVC(target = None):
+    log.debug('Checking codecs for %s',target)
     FFPROBE_CMD = 'ffprobe'
 
     call_result = subprocess.check_output([FFPROBE_CMD, '-v', 'quiet', '-print_format', 'json', '-show_streams', target])
     results = json.loads(call_result)
     streams = results['streams']
+    log.debug('Streams for %s: %s',target,streams)
 
     hasHEVC = False
     for stream in streams:
-        if stream["codec_name"] == "hevc":
-            hasHEVC = True
+        if 'codec_name' in stream:
+            if stream["codec_name"] == "hevc":
+                log.debug('Found an hevc encoded stream')
+                hasHEVC = True
+            else:
+                log.debug('codec for stream is %s', stream["codec_name"])
+        else:
+            log.warning('Stream present in %s with no codec_name value',target)
 
     return hasHEVC
 
