@@ -40,8 +40,8 @@ fhand = logging.FileHandler('./transcode.log')
 fhand.setFormatter(format)
 log.addHandler(fhand)
 
-def safeDelete(target)
-    if os.path.isfile(target)
+def safeDelete(target):
+    if os.path.isfile(target):
         os.remove(target)
 
 def isHEVC(target = None):
