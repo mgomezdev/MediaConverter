@@ -40,6 +40,10 @@ fhand = logging.FileHandler('./transcode.log')
 fhand.setFormatter(format)
 log.addHandler(fhand)
 
+def safeDelete(target)
+    if os.path.isfile(target)
+        os.remove(target)
+
 def isHEVC(target = None):
     log.debug('Checking codecs for %s',target)
     FFPROBE_CMD = 'ffprobe'
@@ -95,7 +99,7 @@ def processFolder(target = None):
                         # If the job crashed in the middle of a transcode, delete the partially completed object
                         if os.path.isfile(destFullPath):
                             logging.warning('Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s', sourceFullPath, destFullPath)
-                            os.remove(destFullPath)
+                            safeDelete(destFullPath)
 
                         # FFMPEG args and reason
                         #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
@@ -114,7 +118,7 @@ def processFolder(target = None):
                             log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
                             log.debug('Deleting the original file')
                             # delete the original file
-                            os.remove(sourceFullPath)
+                            safeDelete(sourceFullPath)
                         except:
                             # FFMPEG choked on something.
                             #  Log the error
@@ -123,7 +127,7 @@ def processFolder(target = None):
                               log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)', sourceFullPath)
                             else:
                               log.error('FFMPEG failed for %s, removing temp files', sourceFullPath)
-                              os.remove(destFullPath)
+                              safeDelete(destFullPath)
                     else:
                         logging.info('Video already in HEVC, but not labeled.  Correcting label of r%s.', filename)
                         os.rename(sourceFullPath,destFullPath)
