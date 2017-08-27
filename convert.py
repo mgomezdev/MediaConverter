@@ -18,11 +18,12 @@ ONE_GB_IN_BYTES = 2 ** 30
 
 # arguments
 TARGET_FOLDER = '/raid/video'
+TEMP_FOLDER = '/storage/transcode_temp'
 FORCE_CONVERSION_MIN_SIZE = ONE_GB_IN_BYTES
-deleteUknown = True
+deleteUnknown = True
 logLevel = logging.INFO
 hevcTag = " -HEVC"
-staySafe = True 
+staySafe = False
 
 
 # Setup logging
@@ -53,6 +54,7 @@ def isHEVC(target = None):
     except:
       log.error('Unexpected error checking stream info for %s',target)
       return False
+
     results = json.loads(call_result)
     streams = results['streams']
     log.debug('Streams for %s: %s',target,streams)
@@ -85,6 +87,7 @@ def processFolder(target = None):
                 # Only check files that aren't already marked
                 if not filename.endswith(hevcTag):
                     destFullPath = os.path.join(root, filename + hevcTag + ".mkv")
+                    tmpFullPath = os.path.join(TEMP_FOLDER,filename + ".tmp.mkv")
                     statinfo = os.stat(sourceFullPath)
 
                     # Check if file already uses HEVC codec
@@ -92,7 +95,7 @@ def processFolder(target = None):
                     #   if the filesize is too large, let's run it anyway
 
                     if not isHEVC(sourceFullPath) or statinfo.st_size >= FORCE_CONVERSION_MIN_SIZE:
-                        transcode_file(destFullPath, sourceFullPath)
+                        transcode_file(destFullPath, tmpFullPath, sourceFullPath)
 
                     else:
                         logging.info('Video already in HEVC, but not labeled.  Correcting label of %s.', filename)
@@ -110,7 +113,7 @@ def processFolder(target = None):
                     os.rename(sourceFullPath, os.path.join(root, hevcName))
 
             else:
-                if deleteUknown:
+                if deleteUnknown:
                     # I don't know what you are, but get out of my library
                     # No, seriously.  The library has some junk files from previous media managers
                     #  e.g. ".cover" files or cover art jpgs.  We don't want those any more.
@@ -121,22 +124,29 @@ def processFolder(target = None):
     return
 
 
-def transcode_file(destFullPath, sourceFullPath):
+def transcode_file(destFullPath, tmpFullPath, sourceFullPath):
     log.info('Executing transcode for %s', sourceFullPath)
     # If the job crashed in the middle of a transcode, delete the partially completed object
+    #  Also check for existing destination since previous versions of this script transcoded directly to the destination.
     if os.path.isfile(destFullPath):
         logging.warning(
-            'Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s',
-            sourceFullPath, destFullPath)
+            'Destination already exists , this is likely due to older version of this script. Deleting pre-existing destination. dest: %s',
+            destFullPath)
         safeDelete(destFullPath)
+
+    if os.path.isfile(tmpFullPath):
+        logging.warning(
+            'Temp file already exists , this is probably due to a failed prior attempt. Deleting pre-existing file. tmp: %s',
+            tmpFullPath)
+        safeDelete(tmpFullPath)
 
     # FFMPEG args and reason
     #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
-    #   -c:v lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
+    #   -c:V lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
     #   -c:a libfdk_aac -b:a 128k <- use libdfk's aac encoder (best quality encoder for mmpeg as of 8/29/16) w/ each channel at 128k bits
     ff = ffmpy.FFmpeg(
         inputs={sourceFullPath: None},
-        outputs={destFullPath: '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
+        outputs={tmpFullPath: '-map 0 -c copy -c:V libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
     try:
         # print so we know where we are (it makes me feel better being able to see the ffmpeg command)
         #  also helpful for debug if ffmpeg crashes out
@@ -147,6 +157,7 @@ def transcode_file(destFullPath, sourceFullPath):
         log.debug('Deleting the original file')
         # delete the original file
         safeDelete(sourceFullPath)
+        os.rename(tmpFullPath,destFullPath)
     except:
         # FFMPEG choked on something.
         #  Log the error
@@ -156,7 +167,7 @@ def transcode_file(destFullPath, sourceFullPath):
                       sourceFullPath)
         else:
             log.error('FFMPEG failed for %s, removing temp files', sourceFullPath)
-            safeDelete(destFullPath)
+            safeDelete(tmpFullPath)
 
 
 processFolder(target = TARGET_FOLDER)
