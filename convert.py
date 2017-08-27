@@ -81,12 +81,12 @@ def processFolder(target = None):
             ext = os.path.splitext(name)[1]
             # The full path to the file (useful for safe deletes and other absolute call
             sourceFullPath = os.path.join(root,name)
+            destFullPath = os.path.join(root, filename + hevcTag + ext)
 
             if ext in vid_extensions:
 
                 # Only check files that aren't already marked
                 if not filename.endswith(hevcTag):
-                    destFullPath = os.path.join(root, filename + hevcTag + ".mkv")
                     tmpFullPath = os.path.join(TEMP_FOLDER,filename + ".tmp.mkv")
                     statinfo = os.stat(sourceFullPath)
 
@@ -109,8 +109,7 @@ def processFolder(target = None):
                 if not filename.endswith(hevcTag):
                     logging.warning('sub file missing HEVC tail, renaming %s', name)
                     # rename the subtitle file to math the new name of the transcoded one
-                    hevcName = filename + hevcTag + ext
-                    os.rename(sourceFullPath, os.path.join(root, hevcName))
+                    os.rename(sourceFullPath, destFullPath)
 
             else:
                 if deleteUnknown:
