@@ -85,7 +85,6 @@ def processFolder(target = None):
                 # Only check files that aren't already marked
                 if not filename.endswith(hevcTag):
                     destFullPath = os.path.join(root, filename + hevcTag + ".mkv")
-
                     statinfo = os.stat(sourceFullPath)
 
                     # Check if file already uses HEVC codec
@@ -93,43 +92,10 @@ def processFolder(target = None):
                     #   if the filesize is too large, let's run it anyway
 
                     if not isHEVC(sourceFullPath) or statinfo.st_size >= FORCE_CONVERSION_MIN_SIZE:
+                        transcode_file(destFullPath, sourceFullPath)
 
-                        log.info('Executing transcode for %s', sourceFullPath)
-
-                        # If the job crashed in the middle of a transcode, delete the partially completed object
-                        if os.path.isfile(destFullPath):
-                            logging.warning('Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s', sourceFullPath, destFullPath)
-                            safeDelete(destFullPath)
-
-                        # FFMPEG args and reason
-                        #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
-                        #   -c:v lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
-                        #   -c:a libfdk_aac -b:a 128k <- use libdfk's aac encoder (best quality encoder for mmpeg as of 8/29/16) w/ each channel at 128k bits
-                        ff = ffmpy.FFmpeg(
-                            inputs={sourceFullPath : None},
-                            outputs={destFullPath : '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
-
-                        try:
-                            # print so we know where we are (it makes me feel better being able to see the ffmpeg command)
-                            #  also helpful for debug if ffmpeg crashes out
-                            log.debug('FFMPEG command - %s', ff.cmd)
-                            # Make the magic happen
-                            ff.run()
-                            log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
-                            log.debug('Deleting the original file')
-                            # delete the original file
-                            safeDelete(sourceFullPath)
-                        except:
-                            # FFMPEG choked on something.
-                            #  Log the error
-                            # Safe Approach
-                            if staySafe:
-                              log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)', sourceFullPath)
-                            else:
-                              log.error('FFMPEG failed for %s, removing temp files', sourceFullPath)
-                              safeDelete(destFullPath)
                     else:
-                        logging.info('Video already in HEVC, but not labeled.  Correcting label of r%s.', filename)
+                        logging.info('Video already in HEVC, but not labeled.  Correcting label of %s.', filename)
                         os.rename(sourceFullPath,destFullPath)
                 else:
                     logging.info('Video file already HEVC and labeled. Ignoring %s', filename)
@@ -153,6 +119,44 @@ def processFolder(target = None):
                 else:
                     log.info('unknown file type for file: %s', sourceFullPath)
     return
+
+
+def transcode_file(destFullPath, sourceFullPath):
+    log.info('Executing transcode for %s', sourceFullPath)
+    # If the job crashed in the middle of a transcode, delete the partially completed object
+    if os.path.isfile(destFullPath):
+        logging.warning(
+            'Destination already exists , this is probably due to a failed prior attempt. Deleting pre-existing destination. source: %s dest: %s',
+            sourceFullPath, destFullPath)
+        safeDelete(destFullPath)
+
+    # FFMPEG args and reason
+    #   -map 0 -c copy  <- this tells ffmpeg to copy everything over, very important for dual language files w/ subtitles
+    #   -c:v lib265 -preset medium -crf 24 <- use h265 medium preset (medium produces a filesize similar to slow but much faster) quailty rate 24
+    #   -c:a libfdk_aac -b:a 128k <- use libdfk's aac encoder (best quality encoder for mmpeg as of 8/29/16) w/ each channel at 128k bits
+    ff = ffmpy.FFmpeg(
+        inputs={sourceFullPath: None},
+        outputs={destFullPath: '-map 0 -c copy -c:v libx265 -preset medium -crf 24 -c:a libfdk_aac -b:a 128k'})
+    try:
+        # print so we know where we are (it makes me feel better being able to see the ffmpeg command)
+        #  also helpful for debug if ffmpeg crashes out
+        log.debug('FFMPEG command - %s', ff.cmd)
+        # Make the magic happen
+        ff.run()
+        log.info('Transcode complete for %s. Cleaning up', sourceFullPath)
+        log.debug('Deleting the original file')
+        # delete the original file
+        safeDelete(sourceFullPath)
+    except:
+        # FFMPEG choked on something.
+        #  Log the error
+        # Safe Approach
+        if staySafe:
+            log.error('FFMPEG failed for %s, leaving everything in place (including temp files for debug)',
+                      sourceFullPath)
+        else:
+            log.error('FFMPEG failed for %s, removing temp files', sourceFullPath)
+            safeDelete(destFullPath)
 
 
 processFolder(target = TARGET_FOLDER)
