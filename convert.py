@@ -6,6 +6,7 @@
 import ffmpy
 import logging
 import os
+import shutil
 import sys
 import subprocess
 import json
@@ -156,7 +157,8 @@ def transcode_file(destFullPath, tmpFullPath, sourceFullPath):
         log.debug('Deleting the original file')
         # delete the original file
         safeDelete(sourceFullPath)
-        os.rename(tmpFullPath,destFullPath)
+        log.info('Renaming %s, to %s', tmpFullPath, destFullPath)
+        shutil.move(tmpFullPath,destFullPath)
     except:
         # FFMPEG choked on something.
         #  Log the error
